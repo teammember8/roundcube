@@ -68,7 +68,9 @@ Version 1.4.23 - SVN
     to the SMTP and IMAP servers over SSL/TLS (thanks to Emmanuel
     Dreyfus).  You can take a look at $imap_stream_options and
     $smtp_stream_options in config_local.example.php in SquirrelMail
-    version 1.5.2 for more information.
+    version 1.5.2 for more information.  These configuration settings
+    should work the same under 1.4.23:
+    http://sourceforge.net/p/squirrelmail/code/HEAD/tree/trunk/squirrelmail/config/config_local.example.php
   - Added ability to show login error from the IMAP server instead of
     traditional "Unknown user or password incorrect" (thanks to Alain
     Williams).  See $display_imap_login_error in the configuration
