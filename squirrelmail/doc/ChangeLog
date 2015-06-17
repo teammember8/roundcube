@@ -83,6 +83,7 @@ Version 1.4.23 - SVN
     nicknames
   - Prevent session lock-up caused by filters plugin trying to move
     messages in an account that is over quota
+  - Added MD5 alternative to directory hash calculation
 
 Version 1.4.22 - 12 July 2011
 -----------------------------
