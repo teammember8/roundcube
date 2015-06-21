@@ -99,6 +99,8 @@ class dbPrefs {
     var $db_type = SMDB_UNKNOWN;
 
     var $default = Array('theme_default' => 0,
+                         'include_self_reply_all' => 0,
+                         'do_not_reply_to_self' => 1,
                          'show_html_default' => '0');
 
     function open() {
