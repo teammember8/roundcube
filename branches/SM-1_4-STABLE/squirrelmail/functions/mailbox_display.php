@@ -268,13 +268,14 @@ function printMessageInfo($imapConnection, $t, $not_last=true, $key, $mailbox,
                         .  '&amp;passed_id='. $msg["ID"]
                         .  '&amp;startMessage='.$start_msg.$searchstr.'"';
                 $td_str .= ' ' .concat_hook_function('subject_link', array($start_msg, $searchstr));
-                if ($subject != $msg['SUBJECT']) {
+                // Nah, it's nice to always have a roll-over
+                //if ($subject != $msg['SUBJECT']) {
                     $title = get_html_translation_table(HTML_SPECIALCHARS);
                     $title = array_flip($title);
                     $title = strtr($msg['SUBJECT'], $title);
                     $title = str_replace('"', "''", $title);
                     $td_str .= " title=\"$title\"";
-                }
+                //}
                 $td_str .= ">$flag$subject$flag_end</a>$bold_end";
                 echo html_tag( 'td', $td_str, 'left', $hlt_color );
                 break;
