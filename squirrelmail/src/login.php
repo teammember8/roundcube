@@ -158,7 +158,9 @@ if (! isset($color) || ! is_array($color)) {
     $color[8]  = '#000000';  /* black         Normal text            */
 }
 
-displayHtmlHeader( "$org_name - " . _("Login"), $header, FALSE );
+// if any plugin returns TRUE here, the standard page header will be skipped
+if (!boolean_hook_function('login_before_page_header', array($header), 1))
+   displayHtmlHeader( "$org_name - " . _("Login"), $header, FALSE );
 
 echo "<body text=\"$color[8]\" bgcolor=\"$color[4]\" link=\"$color[7]\" vlink=\"$color[7]\" alink=\"$color[7]\" onLoad=\"squirrelmail_loginpage_onload();\">" .
      "\n" . addForm('redirect.php', 'post', 'login_form');
