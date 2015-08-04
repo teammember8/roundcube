@@ -214,7 +214,7 @@ echo html_tag( 'table',
                             html_tag( 'tr',
                                 html_tag( 'td',
                                     _("Name:") ,
-                                'right', '', 'width="30%"' ) .
+                                'right', '', 'width="30%" id="username_td"' ) .
                                 html_tag( 'td',
 				    addInput($username_form_name, $loginname_value, 0, 0, ' onfocus="alreadyFocused=true;"'),
                                 'left', '', 'width="70%"' )
@@ -222,7 +222,7 @@ echo html_tag( 'table',
                             html_tag( 'tr',
                                 html_tag( 'td',
                                     _("Password:") ,
-                                'right', '', 'width="30%"' ) .
+                                'right', '', 'width="30%" id="secretkey_td"' ) .
                                 html_tag( 'td',
 				    addPwField($password_form_name, null, ' onfocus="alreadyFocused=true;"').
 				    addHidden('js_autodetect_results', SMPREF_JS_OFF).
