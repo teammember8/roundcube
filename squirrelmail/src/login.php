@@ -230,7 +230,7 @@ echo html_tag( 'table',
 				    addHidden('just_logged_in', '1'),
                                 'left', '', 'width="70%"' )
                             ) ,
-                        'center', $color[4], 'border="0" width="100%"' ) ,
+                        'center', $color[4], 'border="0" width="100%" id="login_table"' ) ,
                     'left',$color[4] )
                 ) . 
                 html_tag( 'tr',
