@@ -235,7 +235,7 @@ echo html_tag( 'table',
                 ) . 
                 html_tag( 'tr',
                     html_tag( 'td',
-                        '<center>'. addSubmit(_("Login")) .'</center>',
+                        '<center>'. addSubmit(_("Login"), 'smsubmit') .'</center>',
                     'left' )
                 ),
             '', $color[4], 'border="0" width="350"' ) . '</center>',
