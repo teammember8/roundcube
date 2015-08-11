@@ -92,8 +92,19 @@ function delete_move_show_msg_array() {
 }
 
 function delete_move_expunge_from_all($id) {
-    global $msgs, $msort, $sort, $imapConnection, $mailbox, $uid_support;
+    global $msgs, $msort, $sort, $imapConnection,
+           $mailbox, $uid_support, $server_sort_array;
     $delAt = -1;
+
+    if (is_array($server_sort_array) && !empty($server_sort_array)) {
+        foreach ($server_sort_array as $k => $v) {
+            if ($v === $id) {
+                $server_sort_array = delete_move_del_arr_elem($server_sort_array, $k);
+                break;
+            }
+        }
+        sqsession_register($server_sort_array, 'server_sort_array');
+    }
 
     if(isset($msort) && count($msort) > 0) {
         for ($i = 0; $i < count($msort); $i++) {
