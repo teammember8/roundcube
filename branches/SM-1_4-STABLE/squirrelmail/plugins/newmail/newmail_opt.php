@@ -152,18 +152,20 @@ if ($allowsound == "true") {
     echo '>' . _("(none)") . '</option>' .  "\n";
     // Iterate sound files for options
     $d = dir(SM_PATH . 'plugins/newmail/sounds');
-    while($entry=$d->read()) {
-        $fname = get_location () . '/sounds/' . $entry;
-        if ($entry != '..' && $entry != '.' && $entry != 'CVS' && $entry != 'index.php') {
-            echo '<option ';
-            if ($fname == $media) {
-                echo 'selected="selected" ';
+    if ($d) {
+        while($entry=$d->read()) {
+            $fname = get_location () . '/sounds/' . $entry;
+            if ($entry != '..' && $entry != '.' && $entry != 'CVS' && $entry != 'index.php') {
+                echo '<option ';
+                if ($fname == $media) {
+                    echo 'selected="selected" ';
+                }
+                echo 'value="' . sm_encode_html_special_chars($fname) . '">' .
+                    sm_encode_html_special_chars($entry) . "</option>\n";
             }
-            echo 'value="' . sm_encode_html_special_chars($fname) . '">' .
-                sm_encode_html_special_chars($entry) . "</option>\n";
         }
+        $d->close();
     }
-    $d->close();
     $media_output = ($media == '(none)') ? _("(none)") : substr($media, strrpos($media, '/')+1);
     echo '</select>'.
         '<input type="submit" value="' . _("Try") . '" name="test" onClick="' .
