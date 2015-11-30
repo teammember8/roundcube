@@ -524,46 +524,20 @@ function sqimap_login ($username, $password, $imap_server_address, $imap_port, $
     $imap_server_address = sqimap_get_user_server($imap_server_address, $username);
         $host=$imap_server_address;
 
-    // NB: Using "ssl://" ensures the highest possible TLS version
-    // will be negotiated with the server (whereas "tls://" only
-    // uses TLS version 1.0)
+    // for backward compatibility: boolean $use_imap_tls set
+    // to TRUE means to use plain TLS (as opposed to STARTTLS)
     //
-    if (($use_imap_tls == true) and (check_php_version(4,3)) and (extension_loaded('openssl'))) {
-        if (function_exists('stream_socket_client')) {
-            $server_address = 'ssl://' . $imap_server_address . ':' . $imap_port;
-            $ssl_context = @stream_context_create($stream_options);
-            $connect_timeout = ini_get('default_socket_timeout');
-            // null timeout is broken
-            if ($connect_timeout == 0)
-                $connect_timeout = 15;
-            $imap_stream = @stream_socket_client($server_address, $error_number, $error_string, $connect_timeout, STREAM_CLIENT_CONNECT, $ssl_context);
-        } else {
-            $imap_stream = @fsockopen('ssl://' . $imap_server_address, $imap_port, $error_number, $error_string, 15);
-        }
-    } else {
-        $imap_stream = @fsockopen($imap_server_address, $imap_port, $error_number, $error_string, 15);
-    }
-
-    /* Do some error correction */
-    if (!$imap_stream) {
-        if (!$hide) {
-            set_up_language($squirrelmail_language, true);
-            require_once(SM_PATH . 'functions/display_messages.php');
-            logout_error( sprintf(_("Error connecting to IMAP server: %s."), $imap_server_address).
-                "<br />\r\n$error_number : $error_string<br />\r\n",
-		sprintf(_("Error connecting to IMAP server: %s."), $imap_server_address) );
-        }
-        exit;
-    }
-
-    $server_info = fgets ($imap_stream, 1024);
-
-    /* Decrypt the password */
-    $password = OneTimePadDecrypt($password, $onetimepad);
+    if ($use_imap_tls === TRUE)
+        $use_imap_tls = 1;
 
     if (!isset($sqimap_capabilities)) {
         sqgetglobalvar('sqimap_capabilities' , $sqimap_capabilities , SQ_SESSION );
     }
+
+    list($imap_stream, $server_info) = sqimap_create_stream($imap_server_address,$imap_port,$use_imap_tls,$stream_options,$hide);
+
+    /* Decrypt the password */
+    $password = OneTimePadDecrypt($password, $onetimepad);
 
     if (($imap_auth_mech == 'cram-md5') OR ($imap_auth_mech == 'digest-md5')) {
         // We're using some sort of authentication OTHER than plain or login
@@ -757,13 +731,151 @@ function sqimap_logout ($imap_stream) {
 }
 
 /**
+ * Connects to the IMAP server and returns a resource identifier for use with
+ * the other SquirrelMail IMAP functions. Does NOT login!
+ * @param string server hostname of IMAP server
+ * @param int port port number to connect to
+ * @param integer $tls whether to use plain text(0), TLS(1) or STARTTLS(2) when connecting.
+ * @param array $stream_options Stream context options, see config_local.php
+ *                           for more details (OPTIONAL)
+ * @param boolean $hide Whether or not to show error output
+ * @return array with two elements: imap-stream resource identifier
+ *               and IMAP server response string
+ *
+ * @since 1.4.23 and 1.5.0 (usable only in 1.5.1 or later) (1.4.23 has a couple subtle differences from 1.5.x)
+ */
+function sqimap_create_stream($server,$port,$tls=0,$stream_options=array(),$hide=FALSE) {
+    global $squirrelmail_language;
+
+    if (strstr($server,':') && ! preg_match("/^\[.*\]$/",$server)) {
+        // numerical IPv6 address must be enclosed in square brackets
+        $server = '['.$server.']';
+    }
+
+    // NB: Using "ssl://" ensures the highest possible TLS version
+    // will be negotiated with the server (whereas "tls://" only
+    // uses TLS version 1.0)
+    //
+    if ($tls == 1) {
+        if ((check_php_version(4,3)) and (extension_loaded('openssl'))) {
+            if (function_exists('stream_socket_client')) {
+                $server_address = 'ssl://' . $server . ':' . $port;
+                $ssl_context = @stream_context_create($stream_options);
+                $connect_timeout = ini_get('default_socket_timeout');
+                // null timeout is broken
+                if ($connect_timeout == 0)
+                    $connect_timeout = 15;
+                $imap_stream = @stream_socket_client($server_address, $error_number, $error_string, $connect_timeout, STREAM_CLIENT_CONNECT, $ssl_context);
+            } else {
+                $imap_stream = @fsockopen('ssl://' . $server, $port, $error_number, $error_string, 15);
+            }
+        } else {
+            require_once(SM_PATH . 'functions/display_messages.php');
+            logout_error( sprintf(_("Error connecting to IMAP server: %s."), $server).
+                '<br />'.
+                _("TLS is enabled, but this version of PHP does not support TLS sockets, or is missing the openssl extension.").
+                '<br /><br />'.
+                _("Please contact your system administrator and report this error."),
+                          sprintf(_("Error connecting to IMAP server: %s."), $server));
+        }
+    } else {
+        $imap_stream = @fsockopen($server, $port, $error_number, $error_string, 15);
+    }
+
+
+    /* Do some error correction */
+    if (!$imap_stream) {
+        if (!$hide) {
+            set_up_language($squirrelmail_language, true);
+            require_once(SM_PATH . 'functions/display_messages.php');
+            logout_error( sprintf(_("Error connecting to IMAP server: %s."), $server).
+                "<br />\r\n$error_number : $error_string<br />\r\n",
+                sprintf(_("Error connecting to IMAP server: %s."), $server) );
+        }
+        exit;
+    }
+    $server_info = fgets ($imap_stream, 1024);
+
+    /**
+     * Implementing IMAP STARTTLS (rfc2595) in php 5.1.0+
+     * http://www.php.net/stream-socket-enable-crypto
+     */
+    if ($tls === 2) {
+        if (function_exists('stream_socket_enable_crypto')) {
+            // check starttls capability, don't use cached capability version
+            if (! sqimap_capability($imap_stream, 'STARTTLS', false)) {
+                // imap server does not declare starttls support
+                sqimap_error_box(sprintf(_("Error connecting to IMAP server: %s."), $server),
+                                 '','',
+                                 _("IMAP STARTTLS is enabled in SquirrelMail configuration, but used IMAP server does not support STARTTLS."));
+                exit;
+            }
+
+            // issue starttls command and check response
+            sqimap_run_command($imap_stream, 'STARTTLS', false, $starttls_response, $starttls_message);
+            // check response
+            if ($starttls_response!='OK') {
+                // starttls command failed
+                sqimap_error_box(sprintf(_("Error connecting to IMAP server: %s."), $server),
+                                 'STARTTLS',
+                                 _("Server replied:") . ' ',
+                                 $starttls_message);
+                exit();
+            }
+
+            // start crypto on connection. suppress function errors.
+            if (@stream_socket_enable_crypto($imap_stream,true,STREAM_CRYPTO_METHOD_TLS_CLIENT)) {
+                // starttls was successful
+
+                /**
+                 * RFC 2595 requires to discard CAPABILITY information after successful
+                 * STARTTLS command. We don't follow RFC, because SquirrelMail stores CAPABILITY
+                 * information only after successful login (src/redirect.php) and cached information
+                 * is used only in other php script connections after successful STARTTLS. If script
+                 * issues sqimap_capability() call before sqimap_login() and wants to get initial
+                 * capability response, script should set third sqimap_capability() argument to false.
+                 */
+                //sqsession_unregister('sqimap_capabilities');
+            } else {
+                /**
+                 * stream_socket_enable_crypto() call failed. Possible issues:
+                 * - broken ssl certificate (uw drops connection, error is in syslog mail facility)
+                 * - some ssl error (can reproduce with STREAM_CRYPTO_METHOD_SSLv3_CLIENT, PHP E_WARNING
+                 *   suppressed in stream_socket_enable_crypto() call)
+                 */
+                sqimap_error_box(sprintf(_("Error connecting to IMAP server: %s."), $server),
+                                 '','',
+                                 _("Unable to start TLS."));
+                /**
+                 * Bug: stream_socket_enable_crypto() does not register SSL errors in
+                 * openssl_error_string() or stream notification wrapper and displays
+                 * them in E_WARNING level message. It is impossible to retrieve error
+                 * message without own error handler.
+                 */
+                exit;
+            }
+        } else {
+            // php install does not support stream_socket_enable_crypto() function
+            sqimap_error_box(sprintf(_("Error connecting to IMAP server: %s."), $server),
+                             '','',
+                             _("IMAP STARTTLS is enabled in SquirrelMail configuration, but used PHP version does not support functions that allow to enable encryption on open socket."));
+            exit;
+        }
+    }
+    return array($imap_stream, $server_info);
+}
+
+/**
  * Retreive the CAPABILITY string from the IMAP server.
  * If capability is set, returns only that specific capability,
  * else returns array of all capabilities.
  */
-function sqimap_capability($imap_stream, $capability='') {
+function sqimap_capability($imap_stream, $capability='', $use_cache=TRUE) {
+
     global $sqimap_capabilities;
-    if (!is_array($sqimap_capabilities)) {
+    $capabilities = $sqimap_capabilities; // don't overwrite global value
+
+    if (!$use_cache || !is_array($capabilities)) {
         $read = sqimap_run_command($imap_stream, 'CAPABILITY', true, $a, $b);
 
         $c = explode(' ', $read[0]);
@@ -772,20 +884,28 @@ function sqimap_capability($imap_stream, $capability='') {
             if (isset($cap_list[1])) {
                 // FIX ME. capabilities can occure multiple times.
                 // THREAD=REFERENCES THREAD=ORDEREDSUBJECT
-                $sqimap_capabilities[$cap_list[0]] = $cap_list[1];
+                $capabilities[$cap_list[0]] = $cap_list[1];
             } else {
-                $sqimap_capabilities[$cap_list[0]] = TRUE;
+                $capabilities[$cap_list[0]] = TRUE;
             }
         }
     }
+
+    // this was terrible design in the first place, but we have
+    // to do this since there may be expectations in the calling
+    // code that the global value gets set if it was empty
+    if (!is_array($sqimap_capabilities)) {
+       $sqimap_capabilities = $capabilities;
+    }
+
     if ($capability) {
-        if (isset($sqimap_capabilities[$capability])) {
-                return $sqimap_capabilities[$capability];
+        if (isset($capabilities[$capability])) {
+                return $capabilities[$capability];
         } else {
                 return false;
         }
     }
-    return $sqimap_capabilities;
+    return $capabilities;
 }
 
 /**
@@ -1128,5 +1248,38 @@ function map_yp_alias($username) {
    $safe_username = escapeshellarg($username);
    $yp = `ypmatch $safe_username aliases`;
    return chop(substr($yp, strlen($username)+1));
+}
+
+/**
+ * Function to display an error related to an IMAP query.
+ * @param string title the caption of the error box
+ * @param string query the query that went wrong
+ * @param string message_title optional message title
+ * @param string message optional error message
+ * @param string $link an optional link to try again
+ * @return void
+ * @since 1.4.23 and 1.5.0
+ */
+function sqimap_error_box($title, $query = '', $message_title = '', $message = '', $link = '')
+{
+    global $color, $squirrelmail_language;
+
+    set_up_language($squirrelmail_language);
+//FIXME: NO HTML IN CORE!
+    $string = "<font color=\"$color[2]\"><b>\n" . $title . "</b><br />\n";
+    $cmd = explode(' ',$query);
+    $cmd= strtolower($cmd[0]);
+
+    if ($query != '' &&  $cmd != 'login')
+        $string .= _("Query:") . ' ' . sm_encode_html_special_chars($query) . '<br />';
+    if ($message_title != '')
+        $string .= $message_title;
+    if ($message != '')
+        $string .= sm_encode_html_special_chars($message);
+//FIXME: NO HTML IN CORE!
+    $string .= "</font><br />\n";
+    if ($link != '')
+        $string .= $link;
+    error_box($string);
 }
 
