@@ -90,6 +90,7 @@ Version 1.4.23 - SVN
     plugins to have more explicit control over login page header
   - Added new "smtp_helo_override" hook; allows plugins to override
     the HELO host sent to the SMTP server when sending messages
+  - Added STARTTLS support for both IMAP and SMTP connections
 
 Version 1.4.22 - 12 July 2011
 -----------------------------
