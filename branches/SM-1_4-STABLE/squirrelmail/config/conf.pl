@@ -336,6 +336,12 @@ $smtp_auth_mech = 'none'               if ( !$smtp_auth_mech );
 $use_imap_tls = 'false'                if ( !$use_imap_tls );
 $imap_auth_mech = 'login'              if ( !$imap_auth_mech );
 
+# $use_imap_tls and $use_smtp_tls are switched to integer since 1.4.23 and 1.5.1
+$use_imap_tls = 0                      if ( $use_imap_tls eq 'false');
+$use_imap_tls = 1                      if ( $use_imap_tls eq 'true');
+$use_smtp_tls = 0                      if ( $use_smtp_tls eq 'false');
+$use_smtp_tls = 1                      if ( $use_smtp_tls eq 'true');
+
 $session_name = 'SQMSESSID'            if (!$session_name );
 
 $default_use_javascript_addr_book = 'false' if (! $default_use_javascript_addr_book);
@@ -488,7 +494,7 @@ while ( ( $command ne "q" ) && ( $command ne "Q" ) ) {
           print "4.  IMAP Server            : $WHT$imapServerAddress$NRM\n";
           print "5.  IMAP Port              : $WHT$imapPort$NRM\n";
           print "6.  Authentication type    : $WHT$imap_auth_mech$NRM\n";
-          print "7.  Secure IMAP (TLS)      : $WHT$use_imap_tls$NRM\n";
+          print "7.  Secure IMAP (TLS)      : $WHT" . display_use_tls($use_imap_tls) . "$NRM\n";
           print "8.  Server software        : $WHT$imap_server_type$NRM\n";
           print "9.  Delimiter              : $WHT$optional_delimiter$NRM\n";
           print "\n";
@@ -505,7 +511,7 @@ while ( ( $command ne "q" ) && ( $command ne "Q" ) ) {
             print "5.   SMTP Port             : $WHT$smtpPort$NRM\n";
             print "6.   POP before SMTP       : $WHT$pop_before_smtp$NRM\n";
             print "7.   SMTP Authentication   : $WHT$smtp_auth_mech" . display_smtp_sitewide_userpass() . "$NRM\n";
-            print "8.   Secure SMTP (TLS)     : $WHT$use_smtp_tls$NRM\n";
+            print "8.   Secure SMTP (TLS)     : $WHT" . display_use_tls($use_smtp_tls) . "$NRM\n";
             print "9.   Header encryption key : $WHT$encode_header_key$NRM\n";
             print "\n";
           }
@@ -750,7 +756,7 @@ while ( ( $command ne "q" ) && ( $command ne "Q" ) ) {
               if    ( $command == 4 )  { $imapServerAddress      = command12(); }
               elsif ( $command == 5 )  { $imapPort               = command13(); }
               elsif ( $command == 6 )  { $imap_auth_mech     = command112a(); }
-              elsif ( $command == 7 )  { $use_imap_tls       = command113("IMAP",$use_imap_tls); }
+              elsif ( $command == 7 )  { $use_imap_tls       = command_use_tls("IMAP",$use_imap_tls); }
               elsif ( $command == 8 )  { $imap_server_type       = command19(); }
               elsif ( $command == 9 )  { $optional_delimiter     = command111(); }
             } elsif ( $show_smtp_settings && lc($useSendmail) eq "true" ) {
@@ -762,7 +768,7 @@ while ( ( $command ne "q" ) && ( $command ne "Q" ) ) {
               elsif ( $command == 5 )  { $smtpPort               = command17(); }
               elsif ( $command == 6 )  { $pop_before_smtp        = command18a(); }
               elsif ( $command == 7 )  { $smtp_auth_mech    = command112b(); }
-              elsif ( $command == 8 )  { $use_smtp_tls      = command113("SMTP",$use_smtp_tls); }
+              elsif ( $command == 8 )  { $use_smtp_tls      = command_use_tls("SMTP",$use_smtp_tls); }
               elsif ( $command == 9 )  { $encode_header_key      = command114(); }
             }
         } elsif ( $menu == 3 ) {
@@ -1267,8 +1273,11 @@ sub command111 {
 # Now offers to detect supported mechs, assuming server & port are set correctly
 
 sub command112a {
-    if ($use_imap_tls =~ /^true\b/i) {
-        print "Auto-detection of login methods is unavailable when using TLS.\n";
+    if ($use_imap_tls ne "0") {
+        # 1. Script does not handle TLS.
+        # 2. Server does not have to declare all supported authentication mechs when 
+        #    STARTTLS is used. Supported mechs are declared only after STARTTLS.
+        print "Auto-detection of login methods is unavailable when using TLS or STARTTLS.\n";
     } else {
         print "If you have already set the hostname and port number, I can try to\n";
         print "detect the mechanisms your IMAP server supports.\n";
@@ -1330,8 +1339,8 @@ sub command112a {
 # SMTP authentication type
 # Possible choices: none, login, plain, cram-md5, digest-md5
 sub command112b {
-    if ($use_smtp_tls =~ /^true\b/i) {
-        print "Auto-detection of login methods is unavailable when using TLS.\n";
+    if ($use_smtp_tls ne "0") {
+        print "Auto-detection of login methods is unavailable when using TLS or STARTTLS.\n";
     } elsif (eval ("use IO::Socket; 1")) {
         print "If you have already set the hostname and port number, I can try to\n";
         print "automatically detect the mechanisms your SMTP server supports.\n";
@@ -1526,31 +1535,47 @@ sub display_smtp_sitewide_userpass() {
 # TLS
 # This sub is reused for IMAP and SMTP
 # Args: service name, default value
-sub command113 {
+sub command_use_tls {
     my($default_val,$service,$inval);
     $service=$_[0];
     $default_val=$_[1];
     print "TLS (Transport Layer Security) encrypts the traffic between server and client.\n";
-    print "If you're familiar with SSL, you get the idea.\n";
-    print "To use this feature, your " . $service . " server must offer TLS\n";
-    print "capability, plus PHP 4.3.x with OpenSSL support.\n";
-    print "Note that the 'STARTTLS' command is not supported; the server must\n";
-    print "have a dedicated port listening for TLS connections.\n";
-    print "\nIf your " . $service . " server is localhost, you can safely disable this.\n";
+    print "STARTTLS extensions allow to start encryption on existing plain text connection.\n";
+    print "These options add specific PHP and IMAP server configuration requirements.\n";
+    print "See SquirrelMail documentation about connection security.\n";
+    print "\n";
+    print "If your " . $service . " server is localhost, you can safely disable this.\n";
     print "If it is remote, you may wish to seriously consider enabling this.\n";
-    print "Enable TLS (y/n) [$WHT";
-    if ($default_val eq "true") {
-      print "y";
-    } else {
-      print "n";
+    $valid_input=0;
+    while ($valid_input eq 0) {
+        print "\nSelect connection security model:\n";
+        print " 0 - Use plain text connection\n";
+        print " 1 - Use TLS connection\n";
+        print " 2 - Use STARTTLS extension\n";
+        print "Select [$default_val]: ";
+        $inval=<STDIN>;
+        $inval=trim($inval);
+        if ($inval =~ /^[012]$/ || $inval eq '') {
+            $valid_input = 1;
+        }
     }
-    print "$NRM]: $WHT"; 
-    $inval=<STDIN>;
-    $inval =~ tr/yn//cd;
-    return "true"  if ( $inval eq "y" );
-    return "false" if ( $inval eq "n" );
+    if ($inval ne '') {$default_val = $inval};
     return $default_val;
 }
+
+# This sub is used to display human readable text for 
+# $use_imap_tls and $use_smtp_tls values in conf.pl menu
+sub display_use_tls($) {
+    my $val = shift(@_);
+    my $ret = 'disabled';
+    if ($val eq '2') {
+        $ret = 'STARTTLS';
+    } elsif ($val eq '1') {
+        $ret = 'TLS';
+    }
+    return $ret;
+}
+
 
 # $encode_header_key
 sub command114{
@@ -3759,7 +3784,7 @@ sub save_data {
         print CF "\$imap_auth_mech = '$imap_auth_mech';\n";
         print CF "\$smtp_sitewide_user = '" . quote_single($smtp_sitewide_user) . "';\n";
         print CF "\$smtp_sitewide_pass = '" . quote_single($smtp_sitewide_pass) . "';\n";
-    # boolean
+    # integer
         print CF "\$use_imap_tls = $use_imap_tls;\n";
         print CF "\$use_smtp_tls = $use_smtp_tls;\n";
 
@@ -3978,13 +4003,13 @@ sub set_defaults {
             $domain                         = "gmail.com";
             $imapServerAddress              = "imap.gmail.com";
             $imapPort                       = 993;
-            $use_imap_tls                   = true;
+            $use_imap_tls                   = 1;
             $imap_auth_mech                 = "login";
             $smtpServerAddress              = "smtp.gmail.com";
             $smtpPort                       = 465;
             $pop_before_smtp                = false;
             $useSendmail                    = false;
-            $use_smtp_tls                   = true;
+            $use_smtp_tls                   = 1;
             $smtp_auth_mech                 = "login";
             $continue = 1;
 
