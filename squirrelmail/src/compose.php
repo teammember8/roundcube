@@ -747,6 +747,14 @@ function newMail ($mailbox='', $passed_id='', $passed_ent_id='', $action='', $se
             $body_part_entity = $message->getEntity($ent);
             $bodypart = decodeBody($unencoded_bodypart,
                     $body_part_entity->header->encoding);
+
+            // type of the actual entity should be here;
+            // fall back to parent only if not
+            if (!empty($body_part_entity->type0))
+                $type0 = $body_part_entity->type0;
+            if (!empty($body_part_entity->type1))
+                $type1 = $body_part_entity->type1;
+
             if ($type1 == 'html') {
                 $bodypart = str_replace("\n", ' ', $bodypart);
                 $bodypart = preg_replace(array('/<p>/i','/<br\s*(\/)*>/i'), "\n", $bodypart);
