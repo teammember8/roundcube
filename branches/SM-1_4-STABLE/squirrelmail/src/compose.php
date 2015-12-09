@@ -757,7 +757,7 @@ function newMail ($mailbox='', $passed_id='', $passed_ent_id='', $action='', $se
 
             if ($type1 == 'html') {
                 $bodypart = str_replace("\n", ' ', $bodypart);
-                $bodypart = preg_replace(array('/<p>/i','/<br\s*(\/)*>/i'), "\n", $bodypart);
+                $bodypart = preg_replace(array('/<\/?p>/i','/<div><\/div>/i','/<br\s*(\/)*>/i','/<\/?div>/i'), "\n", $bodypart);
                 $bodypart = str_replace(array('&nbsp;','&gt;','&lt;'),array(' ','>','<'),$bodypart);
                 $bodypart = strip_tags($bodypart);
             }
