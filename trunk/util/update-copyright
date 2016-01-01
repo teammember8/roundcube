@@ -58,6 +58,20 @@ update_copyrights()
             `sed -i "1,10 s/\(copyright .*\)-2[0-9][0-9][0-9]\( The SquirrelMail\)/\1-$this_year\2/i" $file`
 
 
+         # make sure to get the define statement in trunk/include/constants.php
+         #
+         elif [[ $file == 'constants.php' ]] && [[ $1 == 'include' ]]; then
+
+            echo "   Updating $file (including DEFINE statement)"
+
+            # this line can be used to update copyrights
+            # explicitly from just last year to this year
+            #
+            #`sed -i "s/1999-$last_year/1999-$this_year/" $file`
+
+            `sed -i "s/1999-2[0-9][0-9][0-9]/1999-$this_year/" $file`
+
+
          # all other files
          #
          else
