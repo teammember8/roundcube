@@ -359,9 +359,10 @@ echo $IND . "Base URL detected as: <tt>" . sm_encode_html_special_chars($test_lo
     "</tt> (location base " . (empty($config_location_base) ? 'autodetected' : 'set to <tt>' .
     sm_encode_html_special_chars($config_location_base)."</tt>") . ")<br />\n";
 
-/* check outgoing mail */
+/* check minimal requirements for other security options */
 
-if($use_smtp_tls || $use_imap_tls) {
+/* imaps or ssmtp */
+if($use_smtp_tls == 1 || $use_imap_tls == 1) {
     if(!check_php_version(4,3,0)) {
         do_err('You need at least PHP 4.3.0 for SMTP/IMAP TLS!');
     }
@@ -369,6 +370,20 @@ if($use_smtp_tls || $use_imap_tls) {
         do_err('You need the openssl PHP extension to use SMTP/IMAP TLS!');
     }
 }
+/* starttls extensions */
+if($use_smtp_tls === 2 || $use_imap_tls === 2) {
+    if (! function_exists('stream_socket_enable_crypto')) {
+        do_err('If you want to use STARTTLS extension, you need stream_socket_enable_crypto() function from PHP 5.1.0 and newer.');
+    }
+}
+/* digest-md5 */
+if ($smtp_auth_mech=='digest-md5' || $imap_auth_mech =='digest-md5') {
+    if (!extension_loaded('xml')) {
+        do_err('You need the PHP XML extension to use Digest-MD5 authentication!');
+    }
+}
+
+/* check outgoing mail */
 
 echo "Checking outgoing mail service....<br />\n";
 
